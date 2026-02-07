@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Munro Master - Working Version</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root {
+            --heather-purple: #5b4b6b;
+            --mist-grey: #9a9a9a;
+            --munro-green: #1a3d2e;
+            --munro-gold: #c9a227;
+            --white: #ffffff;
+            --off-white: #f5f5f5;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--off-white);
+            color: var(--munro-green);
+            line-height: 1.6;
+            touch-action: manipulation;
+        }
+        .app-header {
+            background: linear-gradient(135deg, var(--munro-green) 0%, var(--heather-purple) 100%);
+            color: var(--white);
+            padding: 1rem;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .app-title { font-size: 1.5rem; font-weight: bold; }
+        .nav-bar {
+            display: flex;
+            justify-content: space-around;
+            background: var(--white);
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e0e0e0;
+            position: sticky;
+            top: 60px;
+            z-index: 99;
+        }
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 0.75rem;
+            color: var(--mist-grey);
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+        .nav-item.active { color: var(--munro-green); font-weight: bold; }
+        .nav-icon { font-size: 1.25rem; display: block; margin-bottom: 0.25rem; }
+        .content-section {
+            display: none;
+            padding: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+            padding-bottom: 80px;
+        }
+        .content-section.active { display: block; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--white);
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--munro-gold); }
+        .filter-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+        .filter-chip {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 2px solid var(--heather-purple);
+            background: var(--white);
+            color: var(--heather-purple);
+            font-size: 0.875rem;
+            cursor: pointer;
+            white-space: nowrap;
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+        .filter-chip.active { background: var(--heather-purple); color: var(--white); }
+        .search-container { margin-bottom: 1rem; }
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .munro-list { display: grid; gap: 1rem; }
+        .munro-card {
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .munro-card.bagged { border-left: 4px solid var(--munro-gold); }
+        .munro-image {
+            height: 120px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+        .munro-badge {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .munro-info { padding: 1rem; }
+        .munro-name { font-weight: bold; font-size: 1.125rem; }
+        .munro-gaelic { font-size: 0.875rem; color: var(--heather-purple); font-style: italic; }
+        .munro-meta { display: flex; gap: 1rem; font-size: 0.875rem; color: var(--mist-grey); margin-top: 0.5rem; }
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 20px 20px 0 0;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+        .modal-body { padding: 1.5rem; }
+        .bag-button {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.125rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 1rem 0;
+            touch-action: manipulation;
+            -webkit-appearance: none;
+        }
+        .bag-button.bag { background: var(--munro-green); color: white; }
+        .bag-button.bagged { background: var(--munro-gold); color: white; }
+        .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .action-btn {
+            padding: 0.75rem;
+            border: 2px solid var(--heather-purple);
+            background: white;
+            color: var(--heather-purple);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            touch-action: manipulation;
+            -webkit-appearance: none;
+        }
+        .photo-upload-area {
+            border: 2px dashed var(--heather-purple);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            margin: 1rem 0;
+        }
+        .file-input { display: none; }
+        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 1rem; }
+        .photo-item { aspect-ratio: 1; border-radius: 8px; overflow: hidden; position: relative; }
+        .photo-item img { width: 100%; height: 100%; object-fit: cover; }
+        #collection-map { height: 400px; border-radius: 12px; margin-bottom: 1rem; }
+        .nearby-list { max-height: 400px; overflow-y: auto; }
+        .nearby-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            background: var(--white);
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+        }
+        .nearby-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--off-white); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .nearby-info { flex: 1; }
+        .nearby-name { font-weight: 600; }
+        .nearby-distance { font-weight: bold; color: var(--munro-gold); }
+        .profile-btn {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-appearance: none;
+        }
+        .profile-btn.primary { background: var(--munro-green); color: white; }
+        #toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--munro-green);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 25px;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">🏔️ Munro Master</div>
+    </header>
+
+    <nav class="nav-bar">
+        <button class="nav-item active" data-section="list">
+            <span class="nav-icon">🏔️</span>
+            Munros
+        </button>
+        <button class="nav-item" data-section="collection">
+            <span class="nav-icon">🗺️</span>
+            Map
+        </button>
+        <button class="nav-item" data-section="profile">
+            <span class="nav-icon">👤</span>
+            Profile
+        </button>
+    </nav>
+
+    <!-- LIST SECTION -->
+    <section id="list-section" class="content-section active">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="bagged-count">0</div>
+                <div class="stat-label">Bagged</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-count">0</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="streak-count">0</div>
+                <div class="stat-label">Streak</div>
+            </div>
+        </div>
+
+        <div class="filter-container">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="bagged">Bagged</button>
+            <button class="filter-chip" data-filter="unbagged">To Bag</button>
+        </div>
+
+        <div class="search-container">
+            <input type="text" class="search-input" id="search-input" placeholder="Search Munros...">
+        </div>
+
+        <div class="munro-list" id="munro-list"></div>
+    </section>
+
+    <!-- COLLECTION/MAP SECTION -->
+    <section id="collection-section" class="content-section">
+        <div id="collection-map"></div>
+        <div style="text-align: center; color: var(--mist-grey); padding: 2rem;">
+            <p>🗺️ Map shows all Munros</p>
+            <p>Green = Bagged, Grey = Not Bagged</p>
+        </div>
+    </section>
+
+    <!-- PROFILE SECTION -->
+    <section id="profile-section" class="content-section">
+        <div style="background: var(--white); padding: 2rem; border-radius: 12px; text-align: center;">
+            <div style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--munro-green), var(--heather-purple)); display: flex; align-items: center; justify-content: center; font-size: 3rem; margin: 0 auto 1rem;">🏔️</div>
+            <input type="text" id="profile-name" placeholder="Your Name" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1.125rem; text-align: center; margin-bottom: 1rem; -webkit-appearance: none;">
+            
+            <button class="profile-btn primary" id="btn-nearby">📡 Find Nearby Bargers</button>
+            <button class="profile-btn primary" onclick="exportData()" style="background: var(--heather-purple);">💾 Export Data</button>
+        </div>
+    </section>
+
+    <!-- MUNRO DETAIL MODAL -->
+    <div class="modal" id="munro-detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Munro Details</h2>
+                <button class="modal-close" onclick="closeMunroDetail()">×</button>
+            </div>
+            <div class="modal-body" id="munro-detail-content"></div>
+        </div>
+    </div>
+
+    <!-- NEARBY MODAL -->
+    <div class="modal" id="nearby-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📡 Nearby Bargers</h2>
+                <button class="modal-close" onclick="closeNearbyModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="nearby-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Data
+        const munros = [
+            {id: 1, name: "Ben Nevis", gaelic: "Beinn Nibheis", elevation: 1345, region: "Fort William", difficulty: "Hard", lat: 56.7968, lng: -5.0035, bagged: false, description: "The highest mountain in the British Isles.", photos: []},
+            {id: 2, name: "Ben Macdui", gaelic: "Beinn Mac Duibh", elevation: 1309, region: "Cairngorms", difficulty: "Moderate", lat: 57.0704, lng: -3.6686, bagged: false, description: "The second highest peak in Britain.", photos: []},
+            {id: 3, name: "Braeriach", gaelic: "Am Bràigh Riabhach", elevation: 1296, region: "Cairngorms", difficulty: "Hard", lat: 57.0783, lng: -3.7280, bagged: false, description: "The third highest mountain in Britain.", photos: []},
+            {id: 4, name: "Ben Lawers", gaelic: "Beinn Labhair", elevation: 1214, region: "Perthshire", difficulty: "Moderate", lat: 56.5449, lng: -4.2208, bagged: false, description: "The highest peak in the southern Highlands.", photos: []},
+            {id: 5, name: "Ben Cruachan", gaelic: "Beinn Cruachan", elevation: 1126, region: "Loch Lomond", difficulty: "Hard", lat: 56.4264, lng: -5.1329, bagged: false, description: "The highest peak in Argyll.", photos: []},
+            {id: 6, name: "Schiehallion", gaelic: "Sìdh Chailleann", elevation: 1083, region: "Perthshire", difficulty: "Moderate", lat: 56.6669, lng: -4.1002, bagged: false, description: "The Fairy Hill of the Caledonians.", photos: []}
+        ];
+
+        const mockNearbyUsers = [
+            {name: "HighlandHarry", bagged: 47, avatar: "🏔️", distance: 2.5, isOnline: true},
+            {name: "GlasgowGinger", bagged: 12, avatar: "🥾", distance: 5.2, isOnline: true},
+            {name: "EdinburghEagle", bagged: 89, avatar: "🦅", distance: 12.8, isOnline: false},
+            {name: "AberdeenAngus", bagged: 156, avatar: "🐂", distance: 8.1, isOnline: true}
+        ];
+
+        let currentFilter = 'all';
+        let currentMunroId = null;
+        let map = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            setupEventListeners();
+            renderMunros();
+            updateStats();
+        });
+
+        function setupEventListeners() {
+            // Navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const section = this.dataset.section;
+                    switchSection(section, this);
+                });
+            });
+
+            // Filter chips
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    currentFilter = this.dataset.filter;
+                    renderMunros();
+                });
+            });
+
+            // Search
+            document.getElementById('search-input').addEventListener('input', renderMunros);
+
+            // Profile buttons
+            document.getElementById('btn-nearby').addEventListener('click', showNearbyModal);
+            document.getElementById('profile-name').addEventListener('change', saveProfile);
+
+            // Close modals on backdrop click
+            document.getElementById('munro-detail-modal').addEventListener('click', function(e) {
+                if (e.target === this) closeMunroDetail();
+            });
+            document.getElementById('nearby-modal').addEventListener('click', function(e) {
+                if (e.target === this) closeNearbyModal();
+            });
+        }
+
+        function switchSection(section, clickedNav) {
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            clickedNav.classList.add('active');
+
+            // Update sections
+            document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
+            document.getElementById(section + '-section').classList.add('active');
+
+            // Init map if needed
+            if (section === 'collection' && !map) {
+                setTimeout(initMap, 100);
+            }
+        }
+
+        function renderMunros() {
+            const container = document.getElementById('munro-list');
+            let filtered = munros;
+
+            // Apply filter
+            if (currentFilter === 'bagged') filtered = munros.filter(m => m.bagged);
+            if (currentFilter === 'unbagged') filtered = munros.filter(m => !m.bagged);
+
+            // Apply search
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(m => m.name.toLowerCase().includes(searchTerm));
+            }
+
+            container.innerHTML = filtered.map(munro => `
+                <div class="munro-card ${munro.bagged ? 'bagged' : ''}" onclick="openMunroDetail(${munro.id})">
+                    <div class="munro-image" style="background: linear-gradient(135deg, ${getRegionColor(munro.region)}40, ${getRegionColor(munro.region)}60);">
+                        ${munro.bagged ? '✅' : '🏔️'}
+                        <div class="munro-badge" style="${munro.bagged ? 'background: var(--munro-gold); color: white;' : ''}">
+                            ${munro.bagged ? 'Bagged!' : munro.difficulty}
+                        </div>
+                    </div>
+                    <div class="munro-info">
+                        <div class="munro-name">${munro.name}</div>
+                        <div class="munro-gaelic">${munro.gaelic}</div>
+                        <div class="munro-meta">
+                            <span>📍 ${munro.region}</span>
+                            <span>📏 ${munro.elevation}m</span>
+                            ${munro.photos.length > 0 ? `<span>📸 ${munro.photos.length}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getRegionColor(region) {
+            const colors = {'Fort William': '#1a3d2e', 'Cairngorms': '#5b4b6b', 'Perthshire': '#c75b3b', 'Loch Lomond': '#2c5f6f'};
+            return colors[region] || '#1a3d2e';
+        }
+
+        function openMunroDetail(id) {
+            currentMunroId = id;
+            const munro = munros.find(m => m.id === id);
+            
+            const content = document.getElementById('munro-detail-content');
+            content.innerHTML = `
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <div style="font-size: 4rem; margin-bottom: 0.5rem;">${munro.bagged ? '✅' : '🏔️'}</div>
+                    <h2 style="color: var(--munro-green);">${munro.name}</h2>
+                    <p style="color: var(--heather-purple); font-style: italic;">${munro.gaelic}</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; text-align: center;">
+                    <div style="background: var(--off-white); padding: 1rem; border-radius: 8px;">
+                        <div style="font-weight: bold; color: var(--munro-green);">${munro.elevation}m</div>
+                        <div style="font-size: 0.75rem; color: var(--mist-grey);">Elevation</div>
+                    </div>
+                    <div style="background: var(--off-white); padding: 1rem; border-radius: 8px;">
+                        <div style="font-weight: bold; color: var(--munro-green);">${munro.difficulty}</div>
+                        <div style="font-size: 0.75rem; color: var(--mist-grey);">Difficulty</div>
+                    </div>
+                    <div style="background: var(--off-white); padding: 1rem; border-radius: 8px;">
+                        <div style="font-weight: bold; color: var(--munro-green);">${munro.region}</div>
+                        <div style="font-size: 0.75rem; color: var(--mist-grey);">Region</div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f4e8; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border-left: 4px solid var(--munro-gold);">
+                    <p style="color: var(--munro-green); line-height: 1.6;">${munro.description}</p>
+                </div>
+
+                <button class="bag-button ${munro.bagged ? 'bagged' : 'bag'}" onclick="toggleBag()" ${munro.bagged ? 'disabled' : ''}>
+                    ${munro.bagged ? '✓ Already Bagged!' : '🎯 Bag This Munro!'}
+                </button>
+
+                <div class="action-buttons">
+                    <button class="action-btn" onclick="openMaps(${munro.id})">🗺️ Open in Maps</button>
+                    <button class="action-btn" onclick="shareMunro(${munro.id})">📤 Share</button>
+                </div>
+
+                <div class="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📷</div>
+                    <div style="font-weight: 600; color: var(--heather-purple);">Add Photo</div>
+                    <div style="font-size: 0.875rem; color: var(--mist-grey);">Tap to take photo</div>
+                    <input type="file" id="photo-input" class="file-input" accept="image/*" capture="environment" onchange="handlePhoto(this)">
+                </div>
+
+                ${munro.photos.length > 0 ? `
+                    <div class="photo-grid">
+                        ${munro.photos.map((photo, idx) => `
+                            <div class="photo-item">
+                                <img src="${photo}" onclick="viewPhoto('${photo}')">
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+
+            document.getElementById('munro-detail-modal').classList.add('active');
+        }
+
+        function closeMunroDetail() {
+            document.getElementById('munro-detail-modal').classList.remove('active');
+        }
+
+        function toggleBag() {
+            const munro = munros.find(m => m.id === currentMunroId);
+            munro.bagged = true;
+            munro.dateBagged = new Date().toISOString();
+            saveData();
+            renderMunros();
+            updateStats();
+            closeMunroDetail();
+            showToast(`🎉 You bagged ${munro.name}!`);
+            if (navigator.vibrate) navigator.vibrate(200);
+            if (map) updateMapMarkers();
+        }
+
+        function handlePhoto(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const munro = munros.find(m => m.id === currentMunroId);
+                    munro.photos.push(e.target.result);
+                    saveData();
+                    openMunroDetail(currentMunroId);
+                    renderMunros();
+                    showToast('Photo added! 📸');
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function viewPhoto(url) {
+            window.open(url, '_blank');
+        }
+
+        function openMaps(id) {
+            const munro = munros.find(m => m.id === id);
+            window.open(`https://www.google.com/maps/search/?api=1&query=${munro.lat},${munro.lng}`, '_blank');
+        }
+
+        function shareMunro(id) {
+            const munro = munros.find(m => m.id === id);
+            const text = `I bagged ${munro.name} (${munro.elevation}m) with Munro Master! 🏔️`;
+            
+            if (navigator.share) {
+                navigator.share({title: 'Munro Master', text: text});
+            } else {
+                navigator.clipboard.writeText(text);
+                showToast('Copied to clipboard!');
+            }
+        }
+
+        function initMap() {
+            map = L.map('collection-map').setView([56.8, -4.5], 7);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+            updateMapMarkers();
+        }
+
+        function updateMapMarkers() {
+            if (!map) return;
+            map.eachLayer(layer => { if (layer instanceof L.Marker) map.removeLayer(layer); });
+            
+            munros.forEach(munro => {
+                const color = munro.bagged ? '#c9a227' : '#8b9a8b';
+                L.circleMarker([munro.lat, munro.lng], {
+                    radius: 8, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9
+                }).addTo(map).bindPopup(`<b>${munro.name}</b><br>${munro.elevation}m`);
+            });
+        }
+
+        function showNearbyModal() {
+            const content = document.getElementById('nearby-content');
+            content.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: var(--munro-green); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>Finding nearby baggers...</div><style>@keyframes spin { to { transform: rotate(360deg); } }</style>';
+            
+            document.getElementById('nearby-modal').classList.add('active');
+            
+            // Simulate finding nearby users
+            setTimeout(() => {
+                renderNearbyList();
+            }, 1500);
+        }
+
+        function renderNearbyList() {
+            const content = document.getElementById('nearby-content');
+            
+            content.innerHTML = `
+                <div style="margin-bottom: 1rem; text-align: center; color: var(--mist-grey);">
+                    ${mockNearbyUsers.length} baggers found nearby
+                </div>
+                <div class="nearby-list">
+                    ${mockNearbyUsers.map(user => `
+                        <div class="nearby-item">
+                            <div class="nearby-avatar">${user.avatar}</div>
+                            <div class="nearby-info">
+                                <div class="nearby-name">${user.name}</div>
+                                <div style="font-size: 0.875rem; color: var(--mist-grey);">
+                                    ${user.bagged} Munros bagged • ${user.isOnline ? '🟢 Online' : '⚪ Offline'}
+                                </div>
+                            </div>
+                            <div class="nearby-distance">${user.distance}km</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="profile-btn primary" style="margin-top: 1rem;" onclick="showToast('You are now visible to others! 📡')">
+                    📡 Broadcast My Location
+                </button>
+            `;
+        }
+
+        function closeNearbyModal() {
+            document.getElementById('nearby-modal').classList.remove('active');
+        }
+
+        function updateStats() {
+            const bagged = munros.filter(m => m.bagged).length;
+            document.getElementById('bagged-count').textContent = bagged;
+            document.getElementById('total-count').textContent = munros.length;
+            document.getElementById('streak-count').textContent = bagged > 0 ? '🔥1' : '0';
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('profile-name').value;
+            localStorage.setItem('profile_name', name);
+            showToast('Profile saved!');
+        }
+
+        function exportData() {
+            const data = {munros: munros, exportDate: new Date().toISOString()};
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `munro-master-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            showToast('Data exported! 💾');
+        }
+
+        function saveData() {
+            localStorage.setItem('munroMaster_data', JSON.stringify(munros));
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem('munroMaster_data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                data.forEach((m, i) => {
+                    if (munros[i]) {
+                        munros[i].bagged = m.bagged || false;
+                        munros[i].photos = m.photos || [];
+                    }
+                });
+            }
+            const profileName = localStorage.getItem('profile_name');
+            if (profileName) document.getElementById('profile-name').value = profileName;
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
